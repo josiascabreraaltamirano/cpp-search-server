@@ -1,40 +1,3 @@
-// Решите загадку: Сколько чисел от 1 до 1000 содержат как минимум одну цифру 3?
-// Напишите ответ здесь:
-/*#include <iostream>
-#include <set>
-#include <string>
-
-using namespace std;
-
-bool Finder(int current_number, int number_to_filter){
-  string cn = to_string(current_number);
-  string ntf = to_string(number_to_filter);
-  for(char n : cn){
-    if(n == ntf[0]){
-      return true;
-    }
-  }
-  return false;
-}
-
-set<int> CounterNumbers(int min_num_range, int max_num_range, int number_to_filter){
-  set<int> result;
-  for(int i = min_num_range; i <= max_num_range; i++){
-    if(Finder(i, number_to_filter)){
-      result.insert(i);
-    }
-  }
-  return result;
-}
-int main() {
-  cout << CounterNumbers(1, 1000, 3).size() << endl; 
-  return 0;
-}*/
-
-
-// Закомитьте изменения и отправьте их в свой репозиторий.
-
-
 #include <algorithm>
 #include <iostream>
 #include <set>
@@ -96,10 +59,9 @@ public:
 
     void AddDocument(int document_id, const string& document) {
         const vector<string> document_words = SplitIntoWordsNoStop(document);
+        const double words_indexed_count = 1.0 / document_words.size();
         for (const string& word : document_words) {
-            words_indexed[word][document_id] = /*valor Term Frecuency*/
-            (count(document_words.begin(), document_words.end(),
-             word) / static_cast<double>(document_words.size()));
+            words_indexed_[word][document_id] += words_indexed_count; /*valor Term Frecuency*/
         }
         ++document_count_;
     }
@@ -119,12 +81,7 @@ public:
     }
 
 private:
-    struct Query {
-        set<string> plus_words;
-        set<string> minus_words;
-    };
-
-    map<string, map<int, double>> words_indexed;
+    map<string, map<int, double>> words_indexed_;
     set<string> stop_words_;
     int document_count_ = 0;
 
@@ -141,12 +98,31 @@ private:
         }
         return words;
     }
+    struct QueryWord {
+        string data;
+        bool is_minus;
+        bool is_stop;
+    };
+
+    QueryWord ParseQueryWord (string text) const {
+        bool is_minus = false;
+        if (text[0] == '-') {
+            is_minus = true;
+            text = text.substr(1);
+        }
+        return {text, is_minus, IsStopWord(text)};
+    }
+
+    struct Query {
+        set<string> plus_words;
+        set<string> minus_words;
+    };
 
     Query ParseQuery (const string& text) const {
         Query parse_query;
         string minus_word;
         for(string& word : SplitIntoWords(text)){
-            minus_word = word.substr(1);
+            minus_word = word.substr(1);//este mero
             if(word[0] == '-' && !IsStopWord(minus_word)){
                 parse_query.minus_words.insert(minus_word);
             } else {
@@ -156,31 +132,26 @@ private:
         return parse_query;
     }
 
+    double CalculateWordIDF (const string& word) const {
+        return log(static_cast<double>(document_count_) / words_indexed_.at(word).size());
+    }
+
     vector<Document> FindAllDocuments(const Query& query_words) const {
-        vector<Document> result;
-        //map de palabra con su IDF
-        //primero 
-        map<string, double> words_IDF;
+
         map<int, double> id_relevance;
-
         for (const auto& word : query_words.plus_words) {
-            if(words_indexed.count(word) != 0){
-                words_IDF[word] = log(static_cast<double>(document_count_)/
-                words_indexed.at(word).size());
+            if(words_indexed_.count(word) == 0){
+                continue;
             }
-        }  
-
-        for (const auto&  word : query_words.plus_words) {
-            if (words_indexed.count(word) != 0) {
-                for (const auto [id, TF] : words_indexed.at(word)) {
-                    id_relevance[id] += (TF * words_IDF[word]);
-                }
+            const double word_IDF = CalculateWordIDF(word);
+            for (const auto [id, TF] : words_indexed_.at(word)) {
+                id_relevance[id] += (TF * word_IDF);
             }
         }
 
         for (const auto& word : query_words.minus_words) {
-            if (words_indexed.count(word) != 0) {
-                for (const auto value : words_indexed.at(word)) {
+            if (words_indexed_.count(word) != 0) {
+                for (const auto value : words_indexed_.at(word)) {
                     if (id_relevance.count(value.first) == 0) {
                         continue;
                     } else {
@@ -190,6 +161,7 @@ private:
             }
         }
 
+        vector<Document> result;
         for (const auto& doc : id_relevance) {
             result.push_back({doc.first, doc.second});
         }
