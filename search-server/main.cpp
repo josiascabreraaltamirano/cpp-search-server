@@ -120,13 +120,12 @@ private:
 
     Query ParseQuery (const string& text) const {
         Query parse_query;
-        string minus_word;
         for(string& word : SplitIntoWords(text)){
-            minus_word = word.substr(1);//este mero
-            if(word[0] == '-' && !IsStopWord(minus_word)){
-                parse_query.minus_words.insert(minus_word);
+            const auto query_word = ParseQueryWord(word);
+            if (!query_word.is_stop) {
+                parse_query.minus_words.insert(query_word.data);
             } else {
-                parse_query.plus_words.insert(word);
+                parse_query.plus_words.insert(query_word.data);
             }
         }
         return parse_query;
