@@ -12,6 +12,7 @@
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double MARGIN_OF_ACCURACY = 1e-6;
 
 string ReadLine() {
     string s;
@@ -84,7 +85,7 @@ public:
     explicit SearchServer(const StringContainer& stop_words) 
     :stop_words_(MakeUniqueNonEmptyStrings(stop_words))
     {
-        for (const auto& word : MakeUniqueNonEmptyStrings(stop_words)) {
+        for (const auto& word : stop_words_) {
             if (!IsSpecialSymbolsFree(word)) {
                 throw invalid_argument("The constructor deny using special symbols in stop_words"s);
             }
@@ -117,28 +118,13 @@ public:
     vector<Document> FindTopDocuments(const string& raw_query, 
                                       DocumentPredicate document_predicate) const {
         const Query query = ParseQuery(raw_query);
-        //check the possible errors from minus word
-        for (const string& word : query.minus_words) {
-            if (word[0] == '-' || word.empty() || !IsSpecialSymbolsFree(word)) {
-                throw invalid_argument("there is a problem with the minus words of the query"s);
-            }
-        }
-        //check the possible errors from plus words
-        for (const string& word : query.plus_words) {
-            if (!IsSpecialSymbolsFree(word)) {
-                throw invalid_argument("there is a problem with the plus_words of the query");
-            }   
-        }
-
         auto matched_documents = FindAllDocuments(query, document_predicate);
-
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
-                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                 if (abs(lhs.relevance - rhs.relevance) < MARGIN_OF_ACCURACY) {
                      return lhs.rating > rhs.rating;
-                 } else {
-                     return lhs.relevance > rhs.relevance;
-                 }
+                 } 
+                 return lhs.relevance > rhs.relevance;
              });
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
@@ -163,26 +149,12 @@ public:
     }
 
     int GetDocumentId(int index) {
-        if (index >= 0 && index < static_cast<int>(id_sorted_by_add_sequence_.size())) {
-            return id_sorted_by_add_sequence_[index];
-        }
-        throw out_of_range("The index is not within the permited range"s);
+        return id_sorted_by_add_sequence_.at(index);
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query,
                                                         int document_id) const {
         const Query query = ParseQuery(raw_query);
-        //check the possible errors from minus worda
-        for (const string& word : query.minus_words) {
-            if (word[0] == '-' || word.empty() || !IsSpecialSymbolsFree(word)) {
-                throw invalid_argument("there is a problem with the minus words of the query"s);
-            }
-        }
-        for (const string& word : query.plus_words) {
-            if (!IsSpecialSymbolsFree(word)) {
-                throw invalid_argument("there is a problem with the plus_words of the query");
-            }   
-        }
         
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
@@ -256,6 +228,11 @@ private:
             is_minus = true;
             text = text.substr(1);
         }
+        //check the word for errors
+        if (text[0] == '-' || text.empty() || !IsSpecialSymbolsFree(text)) {
+            throw invalid_argument("there is a problem with the query"s);
+        }
+
         return {text, is_minus, IsStopWord(text)};
     }
 
